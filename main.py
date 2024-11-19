@@ -27,7 +27,7 @@ def main():
     set_seed(config.seed)
 
     ### get retrieve animal
-    retrieve_single(config,config_file)
+    # retrieve_single(config,config_file)
 
     ### optimize
     trainer = CASA_Trainer(config)

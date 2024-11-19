@@ -36,6 +36,8 @@ from utils.train_utils import get_scale_init, forward_kinematic
 from easydict import EasyDict as edict
 import yaml
 
+import pdb
+
 
 class CASA_Trainer():
     def __init__(self,config):
@@ -54,6 +56,7 @@ class CASA_Trainer():
         self.retrieve_info_dir = os.path.join(self.info_dir, self.retrieval_animal)
         self.retrieve_mesh_dir = os.path.join(self.mesh_dir, self.retrieval_animal)
 
+        self.skeleton_rot = np.array([[1,0,0],[0,0,1],[0,-1,0]])
 
 
     def load_skeleton(self,retrieve_info_dir, retrieval_animal):
@@ -62,9 +65,8 @@ class CASA_Trainer():
             'frame_000001']
         for key in ske.keys():
             head, tail = ske[key]['head'], ske[key]['tail']
-            head[[1]] *= -1
-            tail[[1]] *= -1
-            head, tail = head[[0, 2, 1]], tail[[0, 2, 1]]
+            head = (self.skeleton_rot @ head.reshape(-1,1)).reshape(-1)
+            tail = (self.skeleton_rot @ tail.reshape(-1,1)).reshape(-1)
             ske[key]['head'] = head
             ske[key]['tail'] = tail
         with open(os.path.join(retrieve_info_dir, 'weight', '{}.json'.format(retrieval_animal)), 'r',
@@ -238,7 +240,6 @@ class CASA_Trainer():
 
 
     def init_training(self):
-
         self.w_mask, self.w_flow, self.w_smooth, self.w_symm = int(self.config.model.w_mask), int(self.config.model.w_flow), \
                                            int(self.config.model.w_smooth), int(self.config.model.w_symm)
 
@@ -292,36 +293,34 @@ class CASA_Trainer():
         return p1,p2,basic_mesh,W, faces, offset_net,zeros_tensor,bones_len_scale,shifting,mesh_scale
 
     def optimize(self,):
-
         ### init training data
         p1,p2,basic_mesh,W, faces, offset_net,zeros_tensor,bones_len_scale,shifting,mesh_scale = self.init_training()
 
         #####################################
 
+        ske, json_data = self.load_skeleton(self.retrieve_info_dir, self.retrieval_animal)
 
         train_loader = DataLoader(Optimization_data(self.config), batch_size=int(self.config.data.batch_size),
                                   drop_last=True,
                                   shuffle=False, num_workers=0)
         print("Dataloader Length: ", len(train_loader))
 
-
         optimizer = optim.Adam([mesh_scale], lr=1e-3)  # for optimization w/ basic shape offset
         optimizer.add_param_group({"params": shifting, 'lr': 5e-2})
 
         epoch_num = 202
-        flag = 0
 
         for epoch_id in range(epoch_num):
             if epoch_id <= 60 and epoch_id % 15 == 14:
                 for params in optimizer.param_groups:
                     params['lr'] *= 0.5
 
-            if epoch_id > 60 and flag == 0:
+            # if epoch_id > 60 and flag == 0:
+            if epoch_id == 61:
                 optimizer = optim.Adam([p1, p2], lr=4e-3)
                 optimizer.add_param_group({"params": [mesh_scale], 'lr': 1e-4})
                 optimizer.add_param_group({"params": [bones_len_scale], 'lr': 4e-3})
                 optimizer.add_param_group({"params": offset_net.parameters(), 'lr': 1e-3})
-                flag = 1
 
             if epoch_id in [100, 140, 175]:
                 for params in optimizer.param_groups:
@@ -334,7 +333,7 @@ class CASA_Trainer():
                 intrin, extrin, mask, flow, index, color = data
                 intrin, extrin, mask, flow, color = intrin.cuda(), extrin.cuda(), mask.cuda(), flow.permute(0, 3, 1,
                                                                                                             2).cuda(), color.cuda()
-
+                
                 if epoch_id == 0 and iter_id == 0:
                     with torch.no_grad():
                         init_scale, shift = get_scale_init(basic_mesh, faces, intrin, extrin,
@@ -353,13 +352,12 @@ class CASA_Trainer():
                 W1 = (W1 / (W1.sum(1, keepdim=True).detach()))
 
                 ### load skeleton and skinning
-                ske, json_data = self.load_skeleton(self.retrieve_info_dir, self.retrieval_animal)
 
                 wbx, _ = forward_kinematic(x[:, :-1].clone(), W1.clone(), bones_len_scale, SO3_R[index[0]:index[-1] + 1],
                                            SE3_T[index[0]:index[-1] + 1], ske, json_data, mesh_scale,
                                            ske_shift.detach().cpu().numpy()
                                            )
-
+                
                 ### diff rendering
                 verts,mesh1 = self.diff_render(wbx,intrin,extrin,faces)
 
@@ -380,17 +378,18 @@ class CASA_Trainer():
 if __name__ == '__main__':
     config_file = 'config/synthetic.yaml'
 
-    self.config = edict(yaml.load(open(config_file, 'r'), Loader=yaml.FullLoader))
+    config = edict(yaml.load(open(config_file, 'r'), Loader=yaml.FullLoader))
 
-    seed = self.config.seed
+    seed = config.seed
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
 
-    test_animal = self.config.data.test_animal
-    self.out_path = os.path.join(self.config.out_dir, test_animal)
+    test_animal = config.data.test_animal
+    out_path = os.path.join(config.out_dir, test_animal)
 
-    os.makedirs(self.out_path, exist_ok=True)
-    os.makedirs(os.path.join(self.out_path, 'temparray'), exist_ok=True)
+    os.makedirs(out_path, exist_ok=True)
+    os.makedirs(os.path.join(out_path, 'temparray'), exist_ok=True)
 
-    optimize(self.config, self.out_path)
+    trainer = CASA_Trainer(config)
+    trainer.optimize()
