@@ -2,7 +2,7 @@ data:
   batch_size: 30
   embedding_dir: ./dataset/embeddings
   end_idx: 30
-  info_dir: /projects/perception/datasets/animal_videos/version9/
+  info_dir: /data/planetzoo
   mesh_dir: ./dataset/simplified_meshes/
   out_dir: ./output
   retrieval_animal: babirusa_juvenile

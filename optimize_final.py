@@ -319,8 +319,8 @@ class CASA_Trainer():
             if epoch_id > 60 and flag == 0:
                 optimizer = optim.Adam([p1, p2], lr=4e-3)
                 optimizer.add_param_group({"params": [mesh_scale], 'lr': 1e-4})
-                optimizer.add_param_group({"params": [bones_len_scale], 'lr': 4e-3})
-                optimizer.add_param_group({"params": offset_net.parameters(), 'lr': 1e-3})
+                # optimizer.add_param_group({"params": [bones_len_scale], 'lr': 4e-3})
+                # optimizer.add_param_group({"params": offset_net.parameters(), 'lr': 1e-3})
                 flag = 1
 
             if epoch_id in [100, 140, 175]:
