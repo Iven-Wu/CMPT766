@@ -170,7 +170,14 @@ data/
 epipolar/
 wandb/
 combined_output/
+input_meshes_new/
+videos/
 externals/
+lietorch/
+ChamferDistance/
+images/
+camels/
+rendering*
 *.jpg
 *.npy
 *.pkl

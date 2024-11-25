@@ -53,9 +53,7 @@ class CASA_Trainer():
         self.raw_info_dir = os.path.join(self.info_dir, self.test_animal)
         self.retrieve_info_dir = os.path.join(self.info_dir, self.retrieval_animal)
         self.retrieve_mesh_dir = os.path.join(self.mesh_dir, self.retrieval_animal)
-
-
-
+        
     def load_skeleton(self,retrieve_info_dir, retrieval_animal):
         ### load skeleton info + align coordinate
         ske = np.load(os.path.join(retrieve_info_dir, 'skeleton', 'skeleton_all_frames.npy'), allow_pickle=True).item()[
@@ -131,7 +129,7 @@ class CASA_Trainer():
         ########## Evaluate IOU Metric ##########
 
         for ind, vertices in enumerate(wbx_results):
-            sr.Mesh(vertices, faces_final).save_obj(os.path.join(temp_out_path, 'Frame{}.obj'.format(ind + 1)))
+            sr.Mesh(vertices, faces_final).save_obj(os.path.join(temp_out_path, 'Frame{:02d}.obj'.format(ind + 1)))
 
     def calculate_loss(self,mesh1,epoch_id,iter_id,verts,offset_x,SO3_R,SE3_T,mask,flow,faces):
 
