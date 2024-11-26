@@ -56,18 +56,17 @@ class CASA_Trainer():
         
     def load_skeleton(self,retrieve_info_dir, retrieval_animal):
         ### load skeleton info + align coordinate
-        ske = np.load(os.path.join(retrieve_info_dir, 'skeleton', 'skeleton_all_frames.npy'), allow_pickle=True).item()[
-            'frame_000001']
+        ske_infos = np.load(os.path.join(self.retrieve_mesh_dir, 'skeleton_all_frames.npy'), allow_pickle=True).item()
+        ske = ske_infos['joints']
         for key in ske.keys():
             head, tail = ske[key]['head'], ske[key]['tail']
-            head[[1]] *= -1
-            tail[[1]] *= -1
-            head, tail = head[[0, 2, 1]], tail[[0, 2, 1]]
-            ske[key]['head'] = head
-            ske[key]['tail'] = tail
-        with open(os.path.join(retrieve_info_dir, 'weight', '{}.json'.format(retrieval_animal)), 'r',
-                  encoding='utf8') as fp:
-            json_data = json.load(fp)
+            # head[[1]] *= -1
+            # tail[[1]] *= -1
+            # head, tail = head[[0, 2, 1]], tail[[0, 2, 1]]
+            ske[key]['head'] = head.astype(np.float32)
+            ske[key]['tail'] = tail.astype(np.float32)
+
+        json_data = ske_infos['joint_index_map']
 
         return ske, json_data
 
@@ -120,6 +119,8 @@ class CASA_Trainer():
                                                      SE3_T, ske, json_data, mesh_scale,
                                                      ske_shift.detach().cpu().numpy()
                                                      )
+        # pdb.set_trace()
+        
         wbx_numpy = wbx_results.cpu().detach().numpy()
         wbx_no_root_numpy = wbx_no_root.cpu().detach().numpy()
         np.save(os.path.join(temp_out_path, 'temparray', 'wbx'), wbx_numpy)
@@ -236,7 +237,6 @@ class CASA_Trainer():
 
 
     def init_training(self):
-
         self.w_mask, self.w_flow, self.w_smooth, self.w_symm = int(self.config.model.w_mask), int(self.config.model.w_flow), \
                                            int(self.config.model.w_smooth), int(self.config.model.w_symm)
 
@@ -252,6 +252,10 @@ class CASA_Trainer():
         ####
 
         points_info, normals_info, face_info = read_obj(os.path.join(self.retrieve_mesh_dir, 'remesh.obj'))
+        points_info, normals_info, face_info = points_info.astype(np.float32), normals_info.astype(np.float32), face_info.astype(np.float32)
+        # pdb.set_trace()
+
+
 
         faces = torch.tensor(face_info).cuda()
 
@@ -259,7 +263,7 @@ class CASA_Trainer():
         points_info = np.concatenate((points_info, np.ones((points_info.shape[0], 1))), axis=1)
 
         ### initialize with gt info
-        W = torch.tensor(np.load(os.path.join(self.retrieve_mesh_dir, 'W1.npy')), requires_grad=True,
+        W = torch.tensor(np.load(os.path.join(self.retrieve_mesh_dir, 'W1.npy')).astype(np.float32), requires_grad=True,
                          device="cuda")  # Initialization with skinning weights of retrieval animal
         N, Frames, B = points_info.shape[0], self.end_idx - self.start_idx, W.shape[1]
 
@@ -347,6 +351,8 @@ class CASA_Trainer():
                 ###　basic transformation
                 x,ske_shift,offset_x = self.basic_transform(basic_mesh, offset_net, zeros_tensor, mesh_scale, shifting)
 
+
+
                 W1 = F.softmax(W * 10)
                 W1 = (W1 / (W1.sum(1, keepdim=True).detach()))
 
@@ -357,6 +363,10 @@ class CASA_Trainer():
                                            SE3_T[index[0]:index[-1] + 1], ske, json_data, mesh_scale,
                                            ske_shift.detach().cpu().numpy()
                                            )
+                # pdb.set_trace()
+                # wbx = x.unsqueeze(0).repeat(30,1,1)
+
+
 
                 ### diff rendering
                 verts,mesh1 = self.diff_render(wbx,intrin,extrin,faces)

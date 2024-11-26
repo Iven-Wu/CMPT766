@@ -5,9 +5,9 @@ data:
   info_dir: /data/planetzoo
   mesh_dir: ./dataset/simplified_meshes/
   out_dir: ./output
-  retrieval_animal: bactrian_camel_female
+  retrieval_animal: dinasour
   start_idx: 0
-  test_animal: bactrian_camel_juvenile
+  test_animal: common_warthog_juvenile
 model:
   w_flow: 10000
   w_mask: 10000

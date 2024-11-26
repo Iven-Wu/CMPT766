@@ -5,6 +5,7 @@ from queue import Queue
 import os
 import numpy as np
 import random
+import pdb
 
 seed = 2000
 random.seed(seed)
@@ -53,17 +54,14 @@ def get_scale_init(basic_mesh1, face1, intrin1, extrin1, mask1, soft_renderer):
 
 
 def forward_kinematic(vert_pos, skin_weight, bones_len_scale, R, T, ske, json_data, mesh_scale, ske_shift):
-    # ske = ske_raw.copy()
-    all_bones = json_data['group_name']
-    # all_bones = list(ske.keys())
-    bones_dict = {}  # record index for each bone
-    Rs_dict = {}  # record transformations of all parents for each bone
-    for ind, bone in enumerate(all_bones):
-        bones_dict[bone] = ind
+    bones_dict = json_data
+    all_bones = list(bones_dict.keys())
+    Rs_dict = {}
+    for bone in bones_dict.keys():
         Rs_dict[bone] = []
 
     final_pos = torch.zeros_like(vert_pos[None].repeat(R.shape[0], 1, 1), requires_grad=True, device="cuda")  # final position
-    root = ske['def_c_root_joint']
+    root = ske['J_center']
     q = Queue(maxsize=(len(bones_dict.keys()) + 1))
     q1 = Queue(maxsize=(len(bones_dict.keys()) + 1))
     root['new_head'] = root['head']  # new head/tail are the postion of head/tail after deformation
@@ -91,6 +89,7 @@ def forward_kinematic(vert_pos, skin_weight, bones_len_scale, R, T, ske, json_da
             continue
         q.put(child)
 
+
     while not q.empty():  # Apply transformation
 
         joint_name = q.get()
@@ -106,7 +105,8 @@ def forward_kinematic(vert_pos, skin_weight, bones_len_scale, R, T, ske, json_da
             joint['scale_tail'] += ske_shift
         head, tail = torch.from_numpy(joint['scale_head']).float().cuda(), torch.from_numpy(joint['scale_tail']).float().cuda()
         bone_vec = tail - head
-        endpoint_weight = (torch.mul(vert_pos - head, bone_vec).sum(1) / (bone_vec ** 2).sum().item()).clamp(0., 1.)
+        # pdb.set_trace()
+        endpoint_weight = (torch.mul(vert_pos - head, bone_vec).sum(1) / ((bone_vec ** 2).sum().item() + 1e-7) ).clamp(0., 1.)
 
         if "new_head" not in joint.keys():
             joint['new_head'] = joint['scale_head'][:, None].repeat(R.shape[0], 1).transpose(1, 0)
@@ -127,17 +127,20 @@ def forward_kinematic(vert_pos, skin_weight, bones_len_scale, R, T, ske, json_da
                     ske[all_bones[R_ind]]['tail_before_R']).float().cuda()  # take bone head as rotation center
 
                 R_endpoint_weight = (torch.mul((vert_pos - R_origin_head), (R_origin_tail - R_origin_head)).sum(1) / (
-                            (R_origin_tail - R_origin_head) ** 2).sum().item()).clamp(0., 1.)
+                            (R_origin_tail - R_origin_head) ** 2 + 1e-7).sum().item()  ).clamp(0., 1.)
                 local_pos_for_update = updated_vert_pos - R_head[:, None]  # local position
                 local_pos_for_update += (R_bone_scale - 1) * (R_endpoint_weight[:, None, None] * (R_tail - R_head)[None].repeat(vert_pos.shape[0], 1, 1)).permute(1, 0, 2)
                 updated_local_vert_pos = R[:, [R_ind]].act(local_pos_for_update)  # transform based on lietorch
                 updated_vert_pos = R_head[:, None] + updated_local_vert_pos  # global position
-
+        
         local_pos = updated_vert_pos - new_head[:, None]
         local_pos += (bone_scale - 1) * (endpoint_weight[:, None, None] * (new_tail - new_head)[None].repeat(vert_pos.shape[0], 1, 1)).permute(1, 0, 2)
         updated_local_pos = R[:, [bone_ind]].act(local_pos)
-        final_pos = final_pos + (new_head[:, None] + updated_local_pos) * skin_weight[:, [bone_ind]]  # LBS
 
+        # if final_pos.isnan().any():
+        #     pdb.set_trace()
+        final_pos = final_pos + (new_head[:, None] + updated_local_pos) * skin_weight[:, [bone_ind]]  # LBS
+        
         if not len(joint['children']) == 0:  # update positions of new_head/new_tail for all child bones
             for child in joint['children']:
                 if not child in all_bones:
@@ -161,10 +164,13 @@ def forward_kinematic(vert_pos, skin_weight, bones_len_scale, R, T, ske, json_da
                 child_head, child_tail = torch.from_numpy(child_joint['new_head']).float().cuda(), torch.from_numpy(
                     child_joint['new_tail']).float().cuda()
                 local_head, local_tail = child_head[None] - new_head[None], child_tail[None] - new_head[None]
-                endweight_head = (torch.mul(c_head_old - head, bone_vec).sum() / (bone_vec ** 2).sum()).clamp(0.,
+
+
+                endweight_head = (torch.mul(c_head_old - head, bone_vec).sum() / ((bone_vec ** 2).sum() +1e-7)  ).clamp(0.,
                                                                                                               1.).item()
-                endweight_tail = (torch.mul(c_tail_old - head, bone_vec).sum() / (bone_vec ** 2).sum()).clamp(0.,
+                endweight_tail = (torch.mul(c_tail_old - head, bone_vec).sum() / ((bone_vec ** 2).sum() +1e-7 )).clamp(0.,
                                                                                                               1.).item()
+                # pdb.set_trace()
                 local_head += endweight_head * (bone_scale - 1) * (new_tail - new_head)[None]
                 local_tail += endweight_tail * (bone_scale - 1) * (new_tail - new_head)[None]
                 updated_local_head = R[:, [bone_ind]].act(local_head.permute(1, 0, 2))
@@ -179,6 +185,8 @@ def forward_kinematic(vert_pos, skin_weight, bones_len_scale, R, T, ske, json_da
         joint['tail_before_R'] = joint['new_tail']
         new_tail = (new_head + R[:, [bone_ind]].act((bone_scale * (new_tail - new_head)[:, None]))[:, 0]).detach().cpu().numpy()
         joint['new_tail'] = new_tail  # update tail position for the currently selected bone
+
+    # pdb.set_trace()
 
     new_final_pos = T.act(final_pos.clone())
     for child in root['children']:
