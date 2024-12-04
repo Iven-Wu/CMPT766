@@ -5,13 +5,15 @@ data:
   info_dir: /data/planetzoo
   mesh_dir: ./dataset/simplified_meshes/
   out_dir: ./output
-  retrieval_animal: bactrian_camel_female
+  retrieval_animal: gemsbok_male
   start_idx: 0
-  test_animal: bactrian_camel_juvenile
+  test_animal: gemsbok_female
 model:
   w_flow: 10000
   w_mask: 10000
   w_smooth: 1000000
   w_symm: 10000
+  w_velo: 10000
+  w_consist: 10000
 seed: 2000
 type: synthetic

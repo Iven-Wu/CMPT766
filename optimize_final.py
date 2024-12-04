@@ -182,6 +182,22 @@ class CASA_Trainer():
         loss_bone = F.mse_loss(SO3_R[:-1].inv().mul(SO3_R[1:]).vec(), gt_bone)
         loss_bone3 = F.mse_loss(SE3_T[:-1].inv().mul(SE3_T[1:]).vec()[:, :, 3:], gt_bone2)
 
+
+        gt_velo = torch.zeros((SO3_R.shape[0] - 2, SO3_R.shape[1], 4)).cuda()
+        gt_velo[:, :, -1] += 1
+        gt_velo2 = torch.zeros((SE3_T.shape[0] - 2, SE3_T.shape[1], 4)).cuda()
+        gt_velo2[:, :, -1] += 1
+
+        velo_so3 = SO3_R[:-1].inv().mul(SO3_R[1:])
+        velo_se3 = SE3_T[:-1].inv().mul(SE3_T[1:])
+
+        loss_bone_velo = F.mse_loss(velo_so3[:-1].inv().mul(velo_so3[1:]).vec(),gt_velo)
+        loss_bone_velo2 = F.mse_loss(velo_se3[:-1].inv().mul(velo_se3[1:]).vec()[:, :, 3:], gt_velo2)
+
+        loss_consist = F.mse_loss(mask[1:],mask[:-1])
+
+
+
         ### symmetry loss
         cham_loss = chamfer_3DDist()
         x_reverse = offset_x.clone().detach()
@@ -189,7 +205,9 @@ class CASA_Trainer():
         loss_chamfer = cham_loss(offset_x[None, :, :-1], x_reverse[None, :, :-1])[0].mean()
 
         loss = loss_mask * self.w_mask + loss_flow * self.w_flow + \
-               (loss_bone + loss_bone3) * self.w_smooth + loss_chamfer * self.w_symm
+               (loss_bone + loss_bone3) * self.w_smooth + loss_chamfer * self.w_symm + \
+                (loss_bone_velo+loss_bone_velo2) * self.w_velo + loss_consist * self.w_consist
+
         ##################################################################
         if epoch_id % 10 == 1:
             print(
@@ -237,8 +255,8 @@ class CASA_Trainer():
 
     def init_training(self):
 
-        self.w_mask, self.w_flow, self.w_smooth, self.w_symm = int(self.config.model.w_mask), int(self.config.model.w_flow), \
-                                           int(self.config.model.w_smooth), int(self.config.model.w_symm)
+        self.w_mask, self.w_flow, self.w_smooth, self.w_symm, self.w_velo, self.w_consist = int(self.config.model.w_mask), int(self.config.model.w_flow), \
+                                           int(self.config.model.w_smooth), int(self.config.model.w_symm), int(self.config.model.w_velo), int(self.config.model.w_consist)
 
         self.renderer_soft = sr.SoftRenderer(image_size=1024, sigma_val=1e-5,
                                         camera_mode='look_at', perspective=False, aggr_func_rgb='hard',
@@ -315,6 +333,7 @@ class CASA_Trainer():
                     params['lr'] *= 0.5
 
             if epoch_id > 60 and flag == 0:
+            # if flag == 0:
                 optimizer = optim.Adam([p1, p2], lr=4e-3)
                 optimizer.add_param_group({"params": [mesh_scale], 'lr': 1e-4})
                 # optimizer.add_param_group({"params": [bones_len_scale], 'lr': 4e-3})
