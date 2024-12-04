@@ -9,7 +9,7 @@ class LaplacianLoss(nn.Module):
         self.nv = vertex.size(0)
         self.nf = faces.size(0)
         self.average = average
-        laplacian = np.zeros([self.nv, self.nv]).astype(np.float32)
+        laplacian = np.zeros([self.nv, self.nv], dtype=np.float32)
 
         laplacian[faces[:, 0], faces[:, 1]] = -1
         laplacian[faces[:, 1], faces[:, 0]] = -1

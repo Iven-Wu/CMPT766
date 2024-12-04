@@ -2,7 +2,6 @@ import torch
 from torchvision.ops import masks_to_boxes
 import soft_renderer as sr
 from queue import Queue
-import os
 import numpy as np
 import random
 
@@ -10,9 +9,6 @@ seed = 2000
 random.seed(seed)
 np.random.seed(seed)
 torch.manual_seed(seed)
-
-### init
-
 
 def gen_mask_from_basic(basic_mesh1, faces1, intrin1, extrin1, soft_renderer):
     basic_mesh1 = basic_mesh1[:, :, [0, 2, 1, 3]]
@@ -48,8 +44,6 @@ def get_scale_init(basic_mesh1, face1, intrin1, extrin1, mask1, soft_renderer):
     mid_x_gt, mid_y_gt = (bx_min_gt + bx_max_gt) / 2, (by_min_gt + by_max_gt) / 2
     trans = torch.tensor([mid_x_gt - mid_x_render, mid_y_gt - mid_y_render])
     return init_scale, trans
-
-
 
 
 def forward_kinematic(vert_pos, skin_weight, bones_len_scale, R, T, ske, json_data, mesh_scale, ske_shift):
@@ -188,8 +182,8 @@ def forward_kinematic(vert_pos, skin_weight, bones_len_scale, R, T, ske, json_da
     while not q.empty():
         joint_name = q.get()
         joint = ske[joint_name]
-        joint['newnew_head'] = T.act(torch.tensor(joint['new_head']).cuda().float()[:, None])[:, 0].detach().cpu().numpy()
-        joint['newnew_tail'] = T.act(torch.tensor(joint['new_tail']).cuda().float()[:, None])[:, 0].detach().cpu().numpy()
+        joint['newnew_head'] = T.act(torch.tensor(joint['new_head'], device="cuda", dtype=torch.float32)[:, None])[:, 0].detach().cpu().numpy()
+        joint['newnew_tail'] = T.act(torch.tensor(joint['new_tail'], device="cuda", dtype=torch.float32)[:, None])[:, 0].detach().cpu().numpy()
         for child in joint['children']:
             if not child in all_bones:
                 continue

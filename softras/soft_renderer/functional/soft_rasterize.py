@@ -1,6 +1,4 @@
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
 from torch.autograd import Function
 import numpy as np
 import soft_renderer.cuda.soft_rasterize as soft_rasterize_cuda
@@ -16,8 +14,6 @@ class SoftRasterizeFunction(Function):
                 gamma_val=1e-4, aggr_func_rgb='softmax', aggr_func_alpha='prod',
                 texture_type='surface'):
 
-        # face_vertices: [nb, nf, 9]
-        # textures: [nb, nf, 9]
 
         func_dist_map = {'hard': 0, 'barycentric': 1, 'euclidean': 2}
         func_rgb_map = {'hard': 0, 'softmax': 1}
@@ -67,10 +63,9 @@ class SoftRasterizeFunction(Function):
     @staticmethod
     def backward(ctx, grad_soft_colors):
 
-        #print(grad_soft_colors.dtype)
         face_vertices, textures, soft_colors, faces_info, aggrs_info = ctx.saved_tensors
         image_size = ctx.image_size
-        background_color = ctx.background_color
+
         near = ctx.near
         far = ctx.far
         eps = ctx.eps
@@ -83,8 +78,6 @@ class SoftRasterizeFunction(Function):
         texture_type = ctx.texture_type
         fill_back = ctx.fill_back
 
-#        grad_faces = torch.zeros_like(face_vertices, dtype=torch.float32).to(ctx.device).contiguous()
-#        grad_textures = torch.zeros_like(textures, dtype=torch.float32).to(ctx.device).contiguous()
         grad_faces = torch.zeros_like(face_vertices,dtype=torch.float32,device=ctx.device)
         grad_textures = torch.zeros_like(textures,dtype=torch.float32,device=ctx.device)
 

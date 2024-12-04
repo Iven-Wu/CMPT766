@@ -13,19 +13,19 @@ def voxelize_sub1(faces, size, dim):
         faces = faces[:, :, :, [2, 1, 0]].contiguous()
     elif dim == 1:
         faces = faces[:, :, :, [0, 2, 1]].contiguous()
-    voxels = torch.zeros(bs, size, size, size).int().cuda()
+    voxels = torch.zeros((bs, size, size, size), dtype=torch.int32, device="cuda")
     return voxelization_cuda.voxelize_sub1(faces, voxels)[0].transpose(dim + 1, -1)
 
 def voxelize_sub2(faces, size):
     bs = faces.size(0)
     nf = faces.size(1)
-    voxels = torch.zeros(bs, size, size, size).int().cuda()
+    voxels = torch.zeros((bs, size, size, size), dtype=torch.int32, device="cuda")
     return voxelization_cuda.voxelize_sub2(faces, voxels)[0]
 
 def voxelize_sub3(faces, voxels):
     bs = voxels.size(0)
     vs = voxels.size(1)
-    visible = torch.zeros_like(voxels, dtype=torch.int32).cuda()
+    visible = torch.zeros_like(voxels, dtype=torch.int32, device="cuda")
     voxels, visible = voxelization_cuda.voxelize_sub3(faces, voxels, visible)
 
     sum_visible = visible.sum()

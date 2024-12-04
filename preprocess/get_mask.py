@@ -1,7 +1,6 @@
 import cv2
 import glob
 import numpy as np
-import pdb
 import os
 
 import argparse
@@ -9,16 +8,9 @@ import argparse
 import detectron2
 from detectron2.config import get_cfg
 from detectron2.engine import DefaultPredictor
-from detectron2.utils.visualizer import Visualizer, ColorMode
-from detectron2.data import MetadataCatalog
-
-import sys
 from detectron2.projects import point_rend
 
 def gen_mask(img_dir):
-    # coco_metadata = MetadataCatalog.get("coco_2017_val")
-
-    # img_dir = '/scratch/users/yuefanw/dataset/3DPW/imageFiles/courtyard_basketball_01/'
 
     img_outdir = 'dataset/JPEGImages/Full-Resolution/custom'
     mask_outdir = 'dataset/Annotations/Full-Resolution/custom'
@@ -42,27 +34,25 @@ def gen_mask(img_dir):
         print(path)
         img = cv2.imread(path)
         shape = img.shape[:2]
-        mask = np.zeros(shape)
+        mask = np.zeros(shape, dtype=int)
 
         imgt = img
         segs = predictor(imgt)['instances'].to('cpu')
 
         for it,ins_cls in enumerate(segs.pred_classes):
             print(ins_cls)
-            #if ins_cls ==15: # cat
-            # mask += np.asarray(segs.pred_masks[it])
+
             if ins_cls==0 or (ins_cls >= 14 and ins_cls <= 23):
                 mask += np.asarray(segs.pred_masks[it])
 
-        if (mask.sum())<1000: continue
+        if (mask.sum()) < 1000: continue
 
-        mask = mask.astype(bool).astype(int)*128
+        mask = mask *128
         mask = np.concatenate([mask[:,:,np.newaxis],mask[:,:,np.newaxis],mask[:,:,np.newaxis]],-1)
         mask[:,:,:2] = 0
 
         cv2.imwrite('%s/%05d.jpg'%(img_outdir,counter), img)
         cv2.imwrite('%s/%05d.png'%(mask_outdir,counter), mask)
-
 
         counter+=1
 
